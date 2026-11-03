@@ -1,6 +1,6 @@
 set_xmakever("2.8.2")
 set_project("STCampfireSync")
-set_version("2.0.3")
+set_version("2.0.4")
 set_languages("c++23")
 set_warnings("allextra")
 set_encodings("utf-8")

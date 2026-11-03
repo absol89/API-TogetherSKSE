@@ -1,11 +1,11 @@
 # STCampfireSync
 
 DJLegends' campfire sync plugin for Skyrim Together. Press **F8** to place a campfire in front of you, or pick up one
-you are looking at. Campfires are shared with your party and are removed when their owner leaves. They last for the
+you are looking at. Campfires are shared with nearby players by default, including players outside your party, and are removed when their owner leaves the local audience. They last for the
 current game session and are not written to saves.
 
 This repository contains only `STCampfireSync.dll` and the files needed to build it. It uses Skyrim Together Plugin
-API V1 (party messages).
+API V1 plus the optional scoped-channel registration export. No Plugin API V2 code is included.
 
 ## Requirements
 
@@ -45,3 +45,17 @@ copy looks up `SkyrimTogetherRequestPluginAPI`, the export name used by Skyrim T
 
 The project is licensed under GNU GPL v3 (`LICENSE`). The original plugin's license is in
 `src/STCampfireSync/LICENSE`; third-party notices for the build are in `dist/THIRD-PARTY-NOTICES.txt`.
+
+## Synchronization audience
+
+`NearbySync=1` selects nearby players on STR builds exporting `SkyrimTogetherRegisterScopedChannel`.
+Set `NearbySync=0` for party-only delivery; restart the game after changing it. All participants must use the same mode.
+Older executables with only `SkyrimTogetherRequestPluginAPI` fall back to party-only. The log reports the selected mode.
+An executable without the V1 export cannot support this plugin, regardless of its release label.
+
+The server checks the sender and recipient's worldspace/interior and range for nearby messages. Campfire resends
+its local objects when a peer arrives and removes remote objects when that peer leaves. It does not persist
+objects on the server: an owner's campfires are unavailable while the owner is disconnected or out of the area.
+
+Validation still requires two clients: F8 placement/removal, late arrival, leaving/re-entering a cell, party-only
+isolation, and nearby synchronization without a party.

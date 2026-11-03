@@ -5,7 +5,7 @@
 // export name of Skyrim Together builds since 1.8.7-5.
 //
 // Press the hotkey to place a campfire in front of you, or to pick up one you are looking at. Every party member
-// sees the same campfires. The whole sync is one Channel and two Mod Messages:
+// in the selected audience sees the same campfires. The whole sync is one Channel and two Mod Messages:
 //
 //   place <id> <x> <y> <z> <rotZ>    a campfire exists here
 //   remove <id>                      a campfire is gone
@@ -61,6 +61,7 @@ struct Campfire
 
 STAPI::IVSkyrimTogether1* g_pApi = nullptr;
 STAPI::ChannelHandle g_channel = 0;
+bool g_nearby = false;
 RE::TESBoundObject* g_pBase = nullptr;
 std::uint32_t g_hotkey = kDefaultHotkey;
 std::mt19937 g_random{std::random_device{}()};
@@ -284,7 +285,7 @@ void OnPartyChanged(std::uint32_t aPlayerId, bool aJoined)
 
             if (aJoined)
             {
-                // Late joiner: tell them about the campfires we placed and still have.
+                // A new audience member needs our existing campfires.
                 for (const auto& [id, campfire] : g_campfires)
                 {
                     const auto pRef = campfire.Ref.get();
@@ -300,7 +301,7 @@ void OnPartyChanged(std::uint32_t aPlayerId, bool aJoined)
 
             // When we leave or disconnect, we get joined=false for every former member. Once we are alone
             // nobody is left to remove their campfires, so drop them all.
-            if (localId == 0 || !g_pApi->IsInParty())
+            if (localId == 0 || (!g_nearby && !g_pApi->IsInParty()))
                 RemoveRemoteCopiesIf([](const Campfire&) { return true; });
         });
 }
@@ -383,7 +384,20 @@ SKSEPluginLoad(const SKSE::LoadInterface* apSkse)
         return true;
     }
 
-    g_channel = g_pApi->RegisterChannel(kChannelName, OnMessage, OnPartyChanged);
+    const bool nearbyRequested = GetPrivateProfileIntA("General", "NearbySync", 1, kIniPath) != 0;
+    const auto pRegisterScoped = reinterpret_cast<STAPI::RegisterScopedChannel_t>(
+        GetProcAddress(GetModuleHandleW(nullptr), STAPI::kRegisterScopedChannelName));
+    if (nearbyRequested && pRegisterScoped)
+    {
+        g_channel = pRegisterScoped(kChannelName, STAPI::ChannelScope::Nearby, OnMessage, OnPartyChanged);
+        g_nearby = g_channel != 0;
+    }
+    else
+    {
+        g_channel = g_pApi->RegisterChannel(kChannelName, OnMessage, OnPartyChanged);
+        if (nearbyRequested)
+            SKSE::log::info("Nearby channels unavailable; using party-only synchronization");
+    }
     if (!g_channel)
     {
         SKSE::log::error("Could not register channel {}", kChannelName);
@@ -392,6 +406,6 @@ SKSEPluginLoad(const SKSE::LoadInterface* apSkse)
     }
 
     SKSE::GetMessagingInterface()->RegisterListener(OnSkseMessage);
-    SKSE::log::info("Registered channel {}", kChannelName);
+    SKSE::log::info("Registered channel {} ({})", kChannelName, g_nearby ? "nearby" : "party");
     return true;
 }
